@@ -27,11 +27,9 @@ spec:
           name: api
         - containerPort: 9001
           name: console
-        env:
-        - name: MINIO_ROOT_USER
-          value: "minioadmin"
-        - name: MINIO_ROOT_PASSWORD
-          value: "minioadmin"
+        envFrom:
+        - secretRef:
+            name: app-secrets
         resources:
           requests:
             memory: "128Mi"

@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: objectdetect
+  labels:
+    app: objectdetect
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: objectdetect
+  template:
+    metadata:
+      labels:
+        app: objectdetect
+    spec:
+      containers:
+      - name: objectdetect
+        image: objectdetect:latest
+        imagePullPolicy: Never
+        envFrom:
+        - configMapRef:
+            name: global-app-config
+        - secretRef:
+            name: app-secrets

@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resize
+  labels:
+    app: resize
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resize
+  template:
+    metadata:
+      labels:
+        app: resize
+    spec:
+      containers:
+      - name: resize
+        image: resize:latest
+        imagePullPolicy: Never
+        envFrom:
+        - configMapRef:
+            name: global-app-config
+        - secretRef:
+            name: app-secrets

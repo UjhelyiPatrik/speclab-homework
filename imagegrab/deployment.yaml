@@ -1,0 +1,41 @@
+# imagegrab/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagegrab
+  labels:
+    app: imagegrab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imagegrab
+  template:
+    metadata:
+      labels:
+        app: imagegrab
+    spec:
+      containers:
+      - name: imagegrab
+        image: imagegrab:latest
+        imagePullPolicy: Never # We are using a local image, so we set this to Never
+        ports:
+        - containerPort: 5000
+        envFrom:
+        - configMapRef:
+            name: global-app-config
+        - secretRef:
+            name: app-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: imagegrab
+spec:
+  type: NodePort # External access
+  selector:
+    app: imagegrab
+  ports:
+    - port: 5000
+      targetPort: 5000
+      nodePort: 30005

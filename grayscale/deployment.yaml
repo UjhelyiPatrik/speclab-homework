@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grayscale
+  labels:
+    app: grayscale
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grayscale
+  template:
+    metadata:
+      labels:
+        app: grayscale
+    spec:
+      containers:
+      - name: grayscale
+        image: grayscale:latest
+        imagePullPolicy: Never
+        envFrom:
+        - configMapRef:
+            name: global-app-config
+        - secretRef:
+            name: app-secrets

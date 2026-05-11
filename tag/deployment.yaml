@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tag
+  labels:
+    app: tag
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tag
+  template:
+    metadata:
+      labels:
+        app: tag
+    spec:
+      containers:
+      - name: tag
+        image: tag:latest
+        imagePullPolicy: Never
+        envFrom:
+        - configMapRef:
+            name: global-app-config
+        - secretRef:
+            name: app-secrets
