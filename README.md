@@ -1,111 +1,129 @@
-# Task Description: Decomposing a Monolith into Microservices
+# Image Processing Microservices Pipeline
 
-## Overview
+This project demonstrates how to decompose a monolithic image processing application into a distributed, event-driven microservices architecture, deployed on Kubernetes (K3s).
 
-Decomposing a monolith application is not trivial, so let's start small. Your task is to decompose a monolithic image processing application into a set of microservices and deploy them to Kubernetes. 
-The original application is defined in [`monolith.py`](./monolith.py) and performs a series of image processing steps to detect objects in images.
+---
 
-## Original Application
+## System Overview
 
-The monolithic application performs the following steps in sequence:
-1. **Image Grab**: Reads an image from a file
-2. **Resize**: Scales down the image to reduce processing time
-3. **Grayscale**: Converts the image to black and white
-4. **Object Detect**: Runs object detection on the smaller, black and white image
-5. **Tag**: Draws bounding boxes and labels on the original image based on detection results
+The system processes images through a sequential pipeline, where each stage is handled by a dedicated microservice. To optimize performance, large binary data (images) are stored in **MinIO** (object storage), while only metadata and file paths are exchanged via **Redis** (message broker) using a Publish/Subscribe pattern.
 
-### Object detection config files
-Download the following files, and copy them to the same folder as monolith.py.
+### Microservices
 
-https://github.com/PINTO0309/MobileNet-SSD-RealSense/blob/master/caffemodel/MobileNetSSD/MobileNetSSD_deploy.caffemodel
+1. **ImageGrab**: Provides a REST API to accept image uploads and initiates the pipeline.
+2. **Resize**: Scales images down to 25% of their original size for faster processing.
+3. **Grayscale**: Converts processed images to a single color channel (black and white).
+4. **ObjectDetect**: Uses a MobileNet SSD model to identify objects within the grayscale images.
+5. **Tag**: Draws bounding boxes and labels on the original high-resolution image based on detection coordinates.
 
-https://github.com/PINTO0309/MobileNet-SSD-RealSense/blob/master/caffemodel/MobileNetSSD/MobileNetSSD_deploy.prototxt
+---
 
-### Run the application
-Start a python virtual env
-```sh
-sudo apt install python3-pip
-sudo apt install python3.12-venv
-python3 -m venv venv
-. venv/bin/activate
+## Setup & Deployment
+
+Follow these steps to deploy the entire stack on a fresh machine (Ubuntu/Debian recommended).
+
+### 1. Prerequisites
+
+Ensure you have the following installed:
+- **Docker**: For building container images.
+- **K3s / Kubernetes Cluster**: A running K8s environment.
+- **kubectl**: Kubernetes command-line tool.
+- **Kustomize**: (Included in modern `kubectl`) for managing configurations.
+
+### 2. Clone the Repository
+
+```bash
+git clone https://github.com/UjhelyiPatrik/speclab-homework.git
+cd speclab-homework
 ```
 
-Install the dependencies
-```sh
-pip install -r requirements.txt
+### 3. Configure Secrets
+
+Create a `secrets.env` file in the root directory. This file is excluded from version control to protect sensitive credentials. Example:
+
+```bash
+cat <<EOF > secrets.env
+MINIO_ACCESS_KEY=your_access_key
+MINIO_SECRET_KEY=your_secret_key
+MINIO_ROOT_USER=your_admin_user
+MINIO_ROOT_PASSWORD=your_admin_password
+EOF
 ```
 
-Run the application
-```sh
-python monolith.py
+### 4. Build and Import Images
+
+Since the cluster uses a local registry, you must build the images and manually import them into the K3s image store. The build.sh shell script handles this task, but you have to add execute right to the file:
+
+```bash
+chmod chmod +x build_images.sh
+./build.sh
 ```
 
-The image with the detected objects is generated to the result.jpg file.
+### 5. Deploy to Kubernetes
 
-## Your Task
+Use Kustomize to deploy all resources (deployments, services, and secret generators) in one command:
 
-Your task is to decompose this monolithic application into the following microservices:
+```bash
+kubectl apply -k .
+```
 
-1. **ImageGrab Service**: Accepts images via an HTTP interface and sends it for processing
-2. **Resize Service**: Resizes images
-3. **Grayscale Service**: Grayscales images
-4. **ObjectDetect Service**: Detects objects on grayscale images
-5. **Tag Service**: Based on the detected objects, draws bounding boxes on the original image
+---
 
-And the end, the image with the detected objects should be available in [MinIO](https://min.io/)
+## Usage
 
-## Implementation Guidelines
+### Accessing the API
 
-1. **Service Communication**:
-    - Services should communicate with each other using a messaging service (this can be Redis, RabbitMQ or other service of you choice)
-    - After processing, each service should push a message to the next service's queue
+The ImageGrab service is exposed via NodePort **30005**. You can trigger the pipeline by uploading an image:
 
-2. **Image Storage**:
-   - As images are usually large files, try to avoid sending them via the messaging service
-     - All images should be stored in MinIO with appropriate naming conventions (the Minio config you can use is provided in the repo)
-     - You can send messages via the messaging service and include the path to the file in MinIO which the image processing service can query and use
+```bash
+curl -X POST -F "image=@test-1.jpg" http://<EC2_PUBLIC_IP>:30005/upload
+```
 
-3. **HTTP Interface**:
-   - The ImageGrab service should expose an HTTP endpoint to accept image uploads
+### Monitoring Logs
 
-4. **Deployment**:
-   - Each service should be containerized
-   - Services should be deployed to Kubernetes using appropriate deployment configurations
+To see the processing in real-time, monitor the logs of the services:
 
-5. **Config values**:
-   - DO NOT hard code configuration values (service host names, usernames, passwords), use configmaps, or configure the environment variables in the deployments
+```bash
+kubectl logs -f -l project=image-processor-v2 --max-log-requests=10
+```
 
-## Hints
+### Viewing Results
 
-- Start by understanding the flow of data in the original monolithic application
-- Design the message format carefully
-- Think about how to scale each service independently
-- Remember to include appropriate logging for debugging
+The final processed image (`result.jpg`) will be available in the MinIO storage:
 
-## [MinIO](https://min.io/)
-MinIO is an open-source object storage server that is compatible with Amazon S3's API. 
-It's designed to be lightweight, high-performance, and easy to deploy. 
-MinIO provides a simple HTTP API for storing and retrieving objects (like files, images, or any binary data) and supports features such as versioning, encryption, and access control. 
-In this lab, MinIO serves as the central storage for images at various stages of processing, allowing each microservice to retrieve and store images without having to pass large binary data through message queues. 
-This approach is more efficient than sending entire images through the messaging service, especially for large files, and provides a persistent storage solution that can survive service restarts or failures.
+- MinIO Console: http://<EC2_PUBLIC_IP>:30003
+- Credentials: Use the values defined in your `secrets.env`.
 
-You can find the [`minio.yaml`](./minio.yaml) file in this repository which you can use to deploy your minio instance to the cluster.
-The minio service's console is exposed to the 30003 Node Port.
+---
 
-MinIO has a python client too that you can use to connect to it.
+## Management
 
-## [Redis](https://redis.io/)
-Redis is a key-value store with lots of different features.
-Redis can act as a message queue, so we provide a [`redis.yaml`](./redis.yaml) config as well which you can use. If you are more familiar with other solutions that can be used for messaging, feel free to use it.
+To stop and remove all resources from the cluster:
 
-Redis has a python client too that you can use to connect to it.
+```bash
+kubectl delete -k .
+```
 
-## Start the Cluster
+---
 
-1. Open AWS Academy login page: https://awsacademy.instructure.com/
-2. Log in.
-3. Start the AWS Academy Learner Lab and open the AWS Management console.
-4. Click on this (CloudFormation) link: https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?templateURL=https://vitmac12-resources.s3.amazonaws.com/k3s-multinode.template&stackName=k3s-multinode
+## Additional Information
 
+### MinIO
 
-## Good luck with the implementation!
+[MinIO](https://min.io/) is an open-source object storage server compatible with Amazon S3's API. It provides a simple HTTP API for storing and retrieving objects (like files, images, or any binary data). In this project, MinIO serves as the central storage for images at various stages of processing, allowing each microservice to retrieve and store images efficiently. The MinIO console is exposed on NodePort **30003**.
+
+You can find the [`minio.yaml`](./minio.yaml) file in this repository to deploy your MinIO instance to the cluster. MinIO has a Python client for easy integration.
+
+### Redis
+
+[Redis](https://redis.io/) is a key-value store that can act as a message queue. This project uses Redis for inter-service communication via publish/subscribe channels. The [`redis.yaml`](./redis.yaml) config is provided for easy deployment. Redis also has a Python client for integration.
+
+---
+
+## Notes
+
+- Do not hard-code configuration values (service host names, usernames, passwords); use configmaps or environment variables in deployments.
+- Each service is containerized and deployed independently for scalability and maintainability.
+- Logging is included in each service for easier debugging and monitoring.
+
+For more details, see the source code and deployment manifests in this repository.

@@ -22,7 +22,7 @@ resources:
   - imagegrab/deployment.yaml
   - resize/deployment.yaml
   - grayscale/deployment.yaml
-  - object-detect/deployment.yaml
+  - objectdetect/deployment.yaml
   - tag/deployment.yaml
   - minio/minio.yaml
   - redis/redis.yaml
