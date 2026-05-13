@@ -105,6 +105,7 @@ def listen_to_queue():
                 else:
                     print(f"[WARN] Invalid message format: {data}")
             except json.JSONDecodeError:
+                print(f"[ERROR] Failed to decode JSON message: {message['data']}")
 
 if __name__ == '__main__':
     listen_to_queue()
